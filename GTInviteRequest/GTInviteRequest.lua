@@ -2,21 +2,15 @@ local addonName = "GTInviteRequest"
 local hasChecked = false
 local checkDelay = 5 -- seconds to wait after login before checking
 
--- LIST YOUR PREFERRED BATTLE.NET FRIENDS HERE (in order of preference)
--- Use their BattleTag (e.g., "FriendName#1234") or their Battle.net display name
-local preferredBNetFriends = {
-    "Ephrick#1517",
-	"VeilOfBass#1159",
-    "Ranger#1237",
-    "Viperish#1350",
-    -- Add more BattleTags as needed
-}
-
 -- Fallback guild to search if no BNet friends are online
 local fallbackGuildName = "Glamour Toads"
 
--- Saved variable to track if we've already requested (persists between sessions)
-GuildInviteRequestDB = GuildInviteRequestDB or { requested = false }
+-- Saved variables (persists between sessions)
+GuildInviteRequestDB = GuildInviteRequestDB or {
+    requested = false,
+    preferredFriends = {}, -- Stored as BattleTags
+    fallbackGuild = "Glamour Toads"
+}
 
 local frame = CreateFrame("Frame")
 
@@ -24,7 +18,7 @@ local frame = CreateFrame("Frame")
 local function FindOnlineBNetFriend()
     local numBNetTotal, numBNetOnline = BNGetNumFriends()
     
-    for _, preferredFriend in ipairs(preferredBNetFriends) do
+    for _, preferredFriend in ipairs(GuildInviteRequestDB.preferredFriends) do
         for i = 1, numBNetOnline do
             local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
             
@@ -73,9 +67,9 @@ local function CheckGuildStatus()
             print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. battleTag .. " via Battle.net")
         else
             -- No BNet friends online, try /who for the fallback guild
-            print("|cff00ff00[" .. addonName .. "]|r No Battle.net friends online, searching for '" .. fallbackGuildName .. "' members...")
+            print("|cff00ff00[" .. addonName .. "]|r No Battle.net friends online, searching for '" .. GuildInviteRequestDB.fallbackGuild .. "' members...")
             C_Timer.After(1, function()
-                C_FriendList.SendWho("g-\"" .. fallbackGuildName .. "\"")
+                C_FriendList.SendWho("g-\"" .. GuildInviteRequestDB.fallbackGuild .. "\"")
             end)
         end
     elseif guildName then
@@ -111,13 +105,177 @@ frame:SetScript("OnEvent", function(self, event, ...)
                 local message = "Hey! Could I get a guild invite please? Thanks!"
                 SendChatMessage(message, "WHISPER", nil, whoInfo.fullName)
                 GuildInviteRequestDB.requested = true
-                print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. fallbackGuildName .. ")")
+                print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. GuildInviteRequestDB.fallbackGuild .. ")")
             end
         else
-            print("|cffff0000[" .. addonName .. "]|r No members of '" .. fallbackGuildName .. "' found online.")
+            print("|cffff0000[" .. addonName .. "]|r No members of '" .. GuildInviteRequestDB.fallbackGuild .. "' found online.")
         end
     end
 end)
+
+-- Create Config GUI
+local configFrame = CreateFrame("Frame", "GuildInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
+configFrame:SetSize(400, 450)
+configFrame:SetPoint("CENTER")
+configFrame:SetMovable(true)
+configFrame:EnableMouse(true)
+configFrame:RegisterForDrag("LeftButton")
+configFrame:SetScript("OnDragStart", configFrame.StartMoving)
+configFrame:SetScript("OnDragStop", configFrame.StopMovingOrSizing)
+configFrame:Hide()
+
+configFrame.title = configFrame:CreateFontString(nil, "OVERLAY")
+configFrame.title:SetFontObject("GameFontHighlight")
+configFrame.title:SetPoint("TOP", configFrame.TitleBg, "TOP", 0, -5)
+configFrame.title:SetText("Guild Invite Request - Settings")
+
+-- Instructions
+local instructions = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+instructions:SetPoint("TOPLEFT", 20, -40)
+instructions:SetText("Add Battle.net friends (in order of preference):")
+
+-- Scroll frame for friend list
+local scrollFrame = CreateFrame("ScrollFrame", nil, configFrame, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", 20, -65)
+scrollFrame:SetPoint("BOTTOMRIGHT", -40, 140)
+
+local scrollChild = CreateFrame("Frame")
+scrollFrame:SetScrollChild(scrollChild)
+scrollChild:SetWidth(scrollFrame:GetWidth())
+scrollChild:SetHeight(1)
+
+-- Function to refresh the friend list display
+local function RefreshFriendList()
+    -- Clear existing elements
+    for _, child in ipairs({scrollChild:GetChildren()}) do
+        child:Hide()
+        child:SetParent(nil)
+    end
+    
+    local yOffset = 0
+    
+    for i, battleTag in ipairs(GuildInviteRequestDB.preferredFriends) do
+        local row = CreateFrame("Frame", nil, scrollChild)
+        row:SetSize(320, 30)
+        row:SetPoint("TOPLEFT", 5, -yOffset)
+        
+        -- Number label
+        local numLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        numLabel:SetPoint("LEFT", 0, 0)
+        numLabel:SetText(i .. ".")
+        
+        -- Friend name
+        local nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        nameLabel:SetPoint("LEFT", 20, 0)
+        nameLabel:SetText(battleTag)
+        
+        -- Up button
+        local upBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        upBtn:SetSize(25, 22)
+        upBtn:SetPoint("RIGHT", -125, 0)
+        upBtn:SetText("U")
+        if i == 1 then
+            upBtn:Disable()
+        else
+            upBtn:SetScript("OnClick", function()
+                -- Swap with previous
+                GuildInviteRequestDB.preferredFriends[i], GuildInviteRequestDB.preferredFriends[i-1] = 
+                    GuildInviteRequestDB.preferredFriends[i-1], GuildInviteRequestDB.preferredFriends[i]
+                RefreshFriendList()
+            end)
+        end
+        
+        -- Down button
+        local downBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        downBtn:SetSize(25, 22)
+        downBtn:SetPoint("RIGHT", -95, 0)
+        downBtn:SetText("D")
+        if i == #GuildInviteRequestDB.preferredFriends then
+            downBtn:Disable()
+        else
+            downBtn:SetScript("OnClick", function()
+                -- Swap with next
+                GuildInviteRequestDB.preferredFriends[i], GuildInviteRequestDB.preferredFriends[i+1] = 
+                    GuildInviteRequestDB.preferredFriends[i+1], GuildInviteRequestDB.preferredFriends[i]
+                RefreshFriendList()
+            end)
+        end
+        
+        -- Remove button
+        local removeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        removeBtn:SetSize(60, 22)
+        removeBtn:SetPoint("RIGHT", 0, 0)
+        removeBtn:SetText("Remove")
+        removeBtn:SetScript("OnClick", function()
+            table.remove(GuildInviteRequestDB.preferredFriends, i)
+            RefreshFriendList()
+        end)
+        
+        yOffset = yOffset + 35
+    end
+    
+    scrollChild:SetHeight(math.max(yOffset, 1))
+end
+
+-- Add friend section
+local addLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+addLabel:SetPoint("BOTTOM", 0, 105)
+addLabel:SetText("Add BattleTag:")
+
+local addBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
+addBox:SetPoint("BOTTOMLEFT", 20, 80)
+addBox:SetPoint("BOTTOMRIGHT", -20, 80)
+addBox:SetHeight(20)
+addBox:SetAutoFocus(false)
+
+-- Fallback guild section
+local guildLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+guildLabel:SetPoint("BOTTOM", 0, 55)
+guildLabel:SetText("Fallback Guild Name:")
+
+local guildBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
+guildBox:SetPoint("BOTTOMLEFT", 20, 30)
+guildBox:SetPoint("BOTTOMRIGHT", -20, 30)
+guildBox:SetHeight(20)
+guildBox:SetAutoFocus(false)
+guildBox:SetText(GuildInviteRequestDB.fallbackGuild)
+guildBox:SetScript("OnEnterPressed", function(self)
+    GuildInviteRequestDB.fallbackGuild = self:GetText()
+    self:ClearFocus()
+    print("|cff00ff00[" .. addonName .. "]|r Fallback guild set to: " .. GuildInviteRequestDB.fallbackGuild)
+end)
+guildBox:SetScript("OnEscapePressed", function(self)
+    self:SetText(GuildInviteRequestDB.fallbackGuild)
+    self:ClearFocus()
+end)
+
+-- Bottom buttons (centered)
+local addBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+addBtn:SetSize(80, 22)
+addBtn:SetPoint("BOTTOM", -45, 8)
+addBtn:SetText("Add")
+addBtn:SetScript("OnClick", function()
+    local text = addBox:GetText()
+    if text and text ~= "" then
+        table.insert(GuildInviteRequestDB.preferredFriends, text)
+        addBox:SetText("")
+        RefreshFriendList()
+    end
+end)
+
+local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+closeBtn:SetSize(80, 22)
+closeBtn:SetPoint("BOTTOM", 45, 8)
+closeBtn:SetText("Close")
+closeBtn:SetScript("OnClick", function()
+    configFrame:Hide()
+end)
+
+-- Function to show config
+local function ShowConfig()
+    RefreshFriendList()
+    configFrame:Show()
+end
 
 -- Slash command to manually trigger, reset, or list BNet friends
 SLASH_GUILDINVITEREQUEST1 = "/gir"
@@ -139,10 +297,13 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
                 print("  " .. (accountInfo.battleTag or accountInfo.accountName) .. " - " .. status)
             end
         end
+    elseif msg == "config" or msg == "settings" then
+        ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 0.3")
+        print("|cff00ff00[" .. addonName .. "]|r Version 0.6")
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
+        print("  /gir config - Open settings GUI")
         print("  /gir check - Manually check and request guild invite")
         print("  /gir reset - Reset request status")
         print("  /gir list - List all Battle.net friends")
@@ -150,4 +311,4 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     end
 end
 
-print("|cff00ff00[" .. addonName .. "]|r Loaded. Use /gir for commands.")
+print("|cff00ff00[" .. addonName .. "]|r Loaded. Use /gir config to manage preferred friends.")
