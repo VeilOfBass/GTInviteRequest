@@ -170,10 +170,9 @@ local function RefreshFriendList()
         nameLabel:SetText(battleTag)
         
         -- Up button
-        local upBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        upBtn:SetSize(25, 22)
+        local upBtn = CreateFrame("Button", nil, row, "UIPanelScrollUpButtonTemplate")
+        upBtn:SetSize(20, 20)
         upBtn:SetPoint("RIGHT", -125, 0)
-        upBtn:SetText("U")
         if i == 1 then
             upBtn:Disable()
         else
@@ -186,10 +185,9 @@ local function RefreshFriendList()
         end
         
         -- Down button
-        local downBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        downBtn:SetSize(25, 22)
-        downBtn:SetPoint("RIGHT", -95, 0)
-        downBtn:SetText("D")
+        local downBtn = CreateFrame("Button", nil, row, "UIPanelScrollDownButtonTemplate")
+        downBtn:SetSize(20, 20)
+        downBtn:SetPoint("RIGHT", -100, 0)
         if i == #GuildInviteRequestDB.preferredFriends then
             downBtn:Disable()
         else
@@ -300,7 +298,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     elseif msg == "config" or msg == "settings" then
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 0.6")
+        print("|cff00ff00[" .. addonName .. "]|r Version 0.7")
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
