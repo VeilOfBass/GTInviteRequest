@@ -1,9 +1,9 @@
 local addonName = "GTInviteRequest"
 local hasChecked = false
 local checkDelay = 5 -- seconds to wait after login before checking
+local waitingForWhoResults = false -- Flag to track if we're expecting /who results
 
--- Fallback guild to search if no BNet friends are online
-local fallbackGuildName = "Glamour Toads"
+local frame = CreateFrame("Frame")
 
 -- Saved variables (persists between sessions)
 GuildInviteRequestDB = GuildInviteRequestDB or {
@@ -11,8 +11,6 @@ GuildInviteRequestDB = GuildInviteRequestDB or {
     preferredFriends = {}, -- Stored as BattleTags
     fallbackGuild = "Glamour Toads"
 }
-
-local frame = CreateFrame("Frame")
 
 -- Function to find an online BNet friend playing WoW
 local function FindOnlineBNetFriend()
@@ -118,7 +116,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 -- Create Config GUI
-local configFrame = CreateFrame("Frame", "GuildInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
+local configFrame = CreateFrame("Frame", "GTInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(400, 450)
 configFrame:SetPoint("CENTER")
 configFrame:SetMovable(true)
@@ -131,7 +129,7 @@ configFrame:Hide()
 configFrame.title = configFrame:CreateFontString(nil, "OVERLAY")
 configFrame.title:SetFontObject("GameFontHighlight")
 configFrame.title:SetPoint("TOP", configFrame.TitleBg, "TOP", 0, -5)
-configFrame.title:SetText("Guild Invite Request - Settings")
+configFrame.title:SetText("Glamour Toad Invite Request - Settings")
 
 -- Instructions
 local instructions = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -302,7 +300,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     elseif msg == "config" or msg == "settings" then
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 0.7")
+        print("|cff00ff00[" .. addonName .. "]|r Version 0.8")
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
