@@ -1,7 +1,8 @@
 ## Interface: 120001, 120000
-## Title: Guild Invite Request
+## Title: Glamour Toad Invite Request
 ## Notes: Automatically requests guild invite from specific players if not in a guild
 ## Author: VeilOfBass
-## Version: 0.3
+## Version: 0.6
+## SavedVariables: GuildInviteRequestDB
 
 GTInviteRequest.lua
