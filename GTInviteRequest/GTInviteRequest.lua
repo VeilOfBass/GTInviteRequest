@@ -68,6 +68,7 @@ local function CheckGuildStatus()
         else
             -- No BNet friends online, try /who for the fallback guild
             print("|cff00ff00[" .. addonName .. "]|r No Battle.net friends online, searching for '" .. GuildInviteRequestDB.fallbackGuild .. "' members...")
+            waitingForWhoResults = true
             C_Timer.After(1, function()
                 C_FriendList.SendWho("g-\"" .. GuildInviteRequestDB.fallbackGuild .. "\"")
             end)
@@ -95,7 +96,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
             GuildInviteRequestDB.requested = false
         end
     elseif event == "WHO_LIST_UPDATE" then
-        -- Process /who results
+        -- Process /who results only if we triggered it
+        if not waitingForWhoResults then return end
+        waitingForWhoResults = false
+        
         if GuildInviteRequestDB.requested then return end
         
         local numWho = C_FriendList.GetNumWhoResults()
