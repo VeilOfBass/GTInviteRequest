@@ -1,0 +1,7 @@
+## Interface: 120001, 120000
+## Title: Guild Invite Request
+## Notes: Automatically requests guild invite from specific players if not in a guild
+## Author: VeilOfBass
+## Version: 0.3
+
+GTInviteRequest.lua
