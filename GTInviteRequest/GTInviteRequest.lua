@@ -9,7 +9,8 @@ local frame = CreateFrame("Frame")
 GuildInviteRequestDB = GuildInviteRequestDB or {
     requested = false,
     preferredFriends = {}, -- Stored as BattleTags
-    fallbackGuild = "Glamour Toads"
+    fallbackGuild = "Glamour Toads",
+    message = "Hey! Could I get a guild invite please? Thanks!"
 }
 
 -- Function to find an online BNet friend playing WoW
@@ -54,10 +55,8 @@ local function CheckGuildStatus()
         local charName, realmName, battleTag, bnetID = FindOnlineBNetFriend()
         
         if charName and bnetID then
-            local message = "Hey! Could I get a guild invite please? Thanks!"
-            
             -- Send Battle.net whisper
-            BNSendWhisper(bnetID, message)
+            BNSendWhisper(bnetID, GuildInviteRequestDB.message)
             
             -- Mark as requested
             GuildInviteRequestDB.requested = true
@@ -104,8 +103,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if numWho > 0 then
             local whoInfo = C_FriendList.GetWhoInfo(1)
             if whoInfo and whoInfo.fullName then
-                local message = "Hey! Could I get a guild invite please? Thanks!"
-                SendChatMessage(message, "WHISPER", nil, whoInfo.fullName)
+                SendChatMessage(GuildInviteRequestDB.message, "WHISPER", nil, whoInfo.fullName)
                 GuildInviteRequestDB.requested = true
                 print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. GuildInviteRequestDB.fallbackGuild .. ")")
             end
@@ -117,7 +115,7 @@ end)
 
 -- Create Config GUI
 local configFrame = CreateFrame("Frame", "GTInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
-configFrame:SetSize(400, 450)
+configFrame:SetSize(400, 500)
 configFrame:SetPoint("CENTER")
 configFrame:SetMovable(true)
 configFrame:EnableMouse(true)
@@ -139,7 +137,7 @@ instructions:SetText("Add Battle.net friends (in order of preference):")
 -- Scroll frame for friend list
 local scrollFrame = CreateFrame("ScrollFrame", nil, configFrame, "UIPanelScrollFrameTemplate")
 scrollFrame:SetPoint("TOPLEFT", 20, -65)
-scrollFrame:SetPoint("BOTTOMRIGHT", -40, 140)
+scrollFrame:SetPoint("BOTTOMRIGHT", -40, 190)
 
 local scrollChild = CreateFrame("Frame")
 scrollFrame:SetScrollChild(scrollChild)
@@ -219,14 +217,35 @@ end
 
 -- Add friend section
 local addLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-addLabel:SetPoint("BOTTOM", 0, 105)
+addLabel:SetPoint("BOTTOM", 0, 155)
 addLabel:SetText("Add BattleTag:")
 
 local addBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
-addBox:SetPoint("BOTTOMLEFT", 20, 80)
-addBox:SetPoint("BOTTOMRIGHT", -20, 80)
+addBox:SetPoint("BOTTOMLEFT", 20, 130)
+addBox:SetPoint("BOTTOMRIGHT", -20, 130)
 addBox:SetHeight(20)
 addBox:SetAutoFocus(false)
+
+-- Message section
+local messageLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+messageLabel:SetPoint("BOTTOM", 0, 105)
+messageLabel:SetText("Invite Message:")
+
+local messageBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
+messageBox:SetPoint("BOTTOMLEFT", 20, 80)
+messageBox:SetPoint("BOTTOMRIGHT", -20, 80)
+messageBox:SetHeight(20)
+messageBox:SetAutoFocus(false)
+messageBox:SetText(GuildInviteRequestDB.message)
+messageBox:SetScript("OnEnterPressed", function(self)
+    GuildInviteRequestDB.message = self:GetText()
+    self:ClearFocus()
+    print("|cff00ff00[" .. addonName .. "]|r Message updated to: " .. GuildInviteRequestDB.message)
+end)
+messageBox:SetScript("OnEscapePressed", function(self)
+    self:SetText(GuildInviteRequestDB.message)
+    self:ClearFocus()
+end)
 
 -- Fallback guild section
 local guildLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -300,7 +319,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     elseif msg == "config" or msg == "settings" then
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 0.8")
+        print("|cff00ff00[" .. addonName .. "]|r Version 0.9")
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
