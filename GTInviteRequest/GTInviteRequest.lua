@@ -9,8 +9,10 @@ local frame = CreateFrame("Frame")
 GuildInviteRequestDB = GuildInviteRequestDB or {
     requested = false,
     preferredFriends = {}, -- Stored as BattleTags
-    fallbackGuild = "Glamour Toads",
-    message = "Hey! Could I get a guild invite please? Thanks!"
+    fallbackGuild = "",
+    message = "Hey! Could I get a guild invite please? Thanks!",
+    fontSize = 12,
+    fontFace = "Fonts\\FRIZQT__.TTF" -- Default WoW font
 }
 
 -- Function to find an online BNet friend playing WoW
@@ -115,7 +117,7 @@ end)
 
 -- Create Config GUI
 local configFrame = CreateFrame("Frame", "GTInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
-configFrame:SetSize(400, 500)
+configFrame:SetSize(450, 500)
 configFrame:SetPoint("CENTER")
 configFrame:SetMovable(true)
 configFrame:EnableMouse(true)
@@ -129,15 +131,81 @@ configFrame.title:SetFontObject("GameFontHighlight")
 configFrame.title:SetPoint("TOP", configFrame.TitleBg, "TOP", 0, -5)
 configFrame.title:SetText("Glamour Toad Invite Request - Settings")
 
--- Instructions
-local instructions = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-instructions:SetPoint("TOPLEFT", 20, -40)
-instructions:SetText("Add Battle.net friends (in order of preference):")
+-- Create tab buttons
+local tabButtons = {}
+local currentTab = 1
+
+local function CreateTabButton(index, text, xOffset)
+    local btn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+    btn:SetSize(100, 25)
+    btn:SetPoint("TOPLEFT", 20 + xOffset, -30)
+    btn:SetText(text)
+    btn.tabIndex = index
+    return btn
+end
+
+tabButtons[1] = CreateTabButton(1, "Friends", 0)
+tabButtons[2] = CreateTabButton(2, "Guild", 110)
+tabButtons[3] = CreateTabButton(3, "Message", 220)
+tabButtons[4] = CreateTabButton(4, "Settings", 330)
+
+-- Create content frames for each tab
+local friendsFrame = CreateFrame("Frame", nil, configFrame)
+friendsFrame:SetPoint("TOPLEFT", 15, -65)
+friendsFrame:SetPoint("BOTTOMRIGHT", -15, 15)
+friendsFrame:Hide()
+
+local guildFrame = CreateFrame("Frame", nil, configFrame)
+guildFrame:SetPoint("TOPLEFT", 15, -65)
+guildFrame:SetPoint("BOTTOMRIGHT", -15, 15)
+guildFrame:Hide()
+
+local messageFrame = CreateFrame("Frame", nil, configFrame)
+messageFrame:SetPoint("TOPLEFT", 15, -65)
+messageFrame:SetPoint("BOTTOMRIGHT", -15, 15)
+messageFrame:Hide()
+
+local settingsFrame = CreateFrame("Frame", nil, configFrame)
+settingsFrame:SetPoint("TOPLEFT", 15, -65)
+settingsFrame:SetPoint("BOTTOMRIGHT", -15, 15)
+settingsFrame:Hide()
+
+local tabFrames = {friendsFrame, guildFrame, messageFrame, settingsFrame}
+
+-- Tab switching function
+local function ShowTab(index)
+    currentTab = index
+    for i, frame in ipairs(tabFrames) do
+        frame:Hide()
+    end
+    tabFrames[index]:Show()
+    
+    -- Update button states
+    for i, btn in ipairs(tabButtons) do
+        if i == index then
+            btn:Disable()
+        else
+            btn:Enable()
+        end
+    end
+end
+
+-- Set up tab button clicks
+for i, btn in ipairs(tabButtons) do
+    btn:SetScript("OnClick", function()
+        ShowTab(btn.tabIndex)
+    end)
+end
+
+-- FRIENDS TAB CONTENT
+local friendsInstructions = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+friendsInstructions:SetPoint("TOPLEFT", 5, -5)
+friendsInstructions:SetText("Add Battle.net friends (in order of preference):")
 
 -- Scroll frame for friend list
-local scrollFrame = CreateFrame("ScrollFrame", nil, configFrame, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", 20, -65)
-scrollFrame:SetPoint("BOTTOMRIGHT", -40, 190)
+local scrollFrame = CreateFrame("ScrollFrame", nil, friendsFrame, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", 5, -30)
+scrollFrame:SetPoint("BOTTOMRIGHT", -25, 55)
 
 local scrollChild = CreateFrame("Frame")
 scrollFrame:SetScrollChild(scrollChild)
@@ -156,7 +224,7 @@ local function RefreshFriendList()
     
     for i, battleTag in ipairs(GuildInviteRequestDB.preferredFriends) do
         local row = CreateFrame("Frame", nil, scrollChild)
-        row:SetSize(320, 30)
+        row:SetSize(360, 30)
         row:SetPoint("TOPLEFT", 5, -yOffset)
         
         -- Number label
@@ -216,46 +284,41 @@ local function RefreshFriendList()
 end
 
 -- Add friend section
-local addLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-addLabel:SetPoint("BOTTOM", 0, 155)
-addLabel:SetText("Add BattleTag:")
+local addFriendLabel = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+addFriendLabel:SetPoint("BOTTOMLEFT", 5, 30)
+addFriendLabel:SetText("Add BattleTag:")
 
-local addBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
-addBox:SetPoint("BOTTOMLEFT", 20, 130)
-addBox:SetPoint("BOTTOMRIGHT", -20, 130)
-addBox:SetHeight(20)
-addBox:SetAutoFocus(false)
+local addFriendBox = CreateFrame("EditBox", nil, friendsFrame, "InputBoxTemplate")
+addFriendBox:SetPoint("BOTTOMLEFT", 5, 5)
+addFriendBox:SetPoint("BOTTOMRIGHT", -90, 5)
+addFriendBox:SetHeight(20)
+addFriendBox:SetAutoFocus(false)
 
--- Message section
-local messageLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-messageLabel:SetPoint("BOTTOM", 0, 105)
-messageLabel:SetText("Invite Message:")
-
-local messageBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
-messageBox:SetPoint("BOTTOMLEFT", 20, 80)
-messageBox:SetPoint("BOTTOMRIGHT", -20, 80)
-messageBox:SetHeight(20)
-messageBox:SetAutoFocus(false)
-messageBox:SetText(GuildInviteRequestDB.message)
-messageBox:SetScript("OnEnterPressed", function(self)
-    GuildInviteRequestDB.message = self:GetText()
-    self:ClearFocus()
-    print("|cff00ff00[" .. addonName .. "]|r Message updated to: " .. GuildInviteRequestDB.message)
-end)
-messageBox:SetScript("OnEscapePressed", function(self)
-    self:SetText(GuildInviteRequestDB.message)
-    self:ClearFocus()
+local addFriendBtn = CreateFrame("Button", nil, friendsFrame, "UIPanelButtonTemplate")
+addFriendBtn:SetSize(80, 22)
+addFriendBtn:SetPoint("BOTTOMRIGHT", -5, 5)
+addFriendBtn:SetText("Add")
+addFriendBtn:SetScript("OnClick", function()
+    local text = addFriendBox:GetText()
+    if text and text ~= "" then
+        table.insert(GuildInviteRequestDB.preferredFriends, text)
+        addFriendBox:SetText("")
+        RefreshFriendList()
+    end
 end)
 
--- Fallback guild section
-local guildLabel = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-guildLabel:SetPoint("BOTTOM", 0, 55)
-guildLabel:SetText("Fallback Guild Name:")
+-- GUILD TAB CONTENT
+local guildInstructions = guildFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+guildInstructions:SetPoint("TOP", 0, -20)
+guildInstructions:SetText("Fallback Guild Name:")
 
-local guildBox = CreateFrame("EditBox", nil, configFrame, "InputBoxTemplate")
-guildBox:SetPoint("BOTTOMLEFT", 20, 30)
-guildBox:SetPoint("BOTTOMRIGHT", -20, 30)
-guildBox:SetHeight(20)
+local guildSubtext = guildFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+guildSubtext:SetPoint("TOP", 0, -40)
+guildSubtext:SetText("If no Battle.net friends are online, the addon will\nsearch for members of this guild to whisper.")
+
+local guildBox = CreateFrame("EditBox", nil, guildFrame, "InputBoxTemplate")
+guildBox:SetPoint("TOP", 0, -80)
+guildBox:SetSize(300, 20)
 guildBox:SetAutoFocus(false)
 guildBox:SetText(GuildInviteRequestDB.fallbackGuild)
 guildBox:SetScript("OnEnterPressed", function(self)
@@ -268,31 +331,97 @@ guildBox:SetScript("OnEscapePressed", function(self)
     self:ClearFocus()
 end)
 
--- Bottom buttons (centered)
-local addBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
-addBtn:SetSize(80, 22)
-addBtn:SetPoint("BOTTOM", -45, 8)
-addBtn:SetText("Add")
-addBtn:SetScript("OnClick", function()
-    local text = addBox:GetText()
-    if text and text ~= "" then
-        table.insert(GuildInviteRequestDB.preferredFriends, text)
-        addBox:SetText("")
-        RefreshFriendList()
+-- MESSAGE TAB CONTENT
+local messageInstructions = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+messageInstructions:SetPoint("TOP", 0, -20)
+messageInstructions:SetText("Customize Your Invite Message:")
+
+local messageSubtext = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+messageSubtext:SetPoint("TOP", 0, -40)
+messageSubtext:SetText("This message will be sent when requesting a guild invite.\nPress Enter to save, Escape to cancel.")
+
+local messageBox = CreateFrame("EditBox", nil, messageFrame, "InputBoxTemplate")
+messageBox:SetPoint("TOP", 0, -80)
+messageBox:SetSize(380, 20)
+messageBox:SetAutoFocus(false)
+messageBox:SetText(GuildInviteRequestDB.message)
+messageBox:SetScript("OnEnterPressed", function(self)
+    GuildInviteRequestDB.message = self:GetText()
+    self:ClearFocus()
+    print("|cff00ff00[" .. addonName .. "]|r Message updated to: " .. GuildInviteRequestDB.message)
+end)
+messageBox:SetScript("OnEscapePressed", function(self)
+    self:SetText(GuildInviteRequestDB.message)
+    self:ClearFocus()
+end)
+
+-- SETTINGS TAB CONTENT
+local settingsInstructions = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+settingsInstructions:SetPoint("TOP", 0, -20)
+settingsInstructions:SetText("Addon Settings:")
+
+-- Font Size
+local fontSizeLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+fontSizeLabel:SetPoint("TOPLEFT", 20, -60)
+fontSizeLabel:SetText("Font Size:")
+
+local fontSizeSlider = CreateFrame("Slider", nil, settingsFrame, "OptionsSliderTemplate")
+fontSizeSlider:SetPoint("TOPLEFT", 20, -85)
+fontSizeSlider:SetMinMaxValues(8, 24)
+fontSizeSlider:SetValue(GuildInviteRequestDB.fontSize)
+fontSizeSlider:SetValueStep(1)
+fontSizeSlider:SetObeyStepOnDrag(true)
+fontSizeSlider.Low:SetText("8")
+fontSizeSlider.High:SetText("24")
+fontSizeSlider.Text:SetText("Size: " .. GuildInviteRequestDB.fontSize)
+fontSizeSlider:SetScript("OnValueChanged", function(self, value)
+    GuildInviteRequestDB.fontSize = value
+    self.Text:SetText("Size: " .. value)
+end)
+
+-- Font Face
+local fontFaceLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+fontFaceLabel:SetPoint("TOPLEFT", 20, -140)
+fontFaceLabel:SetText("Font Face:")
+
+local fontDropdown = CreateFrame("Frame", "GTIRFontDropdown", settingsFrame, "UIDropDownMenuTemplate")
+fontDropdown:SetPoint("TOPLEFT", 0, -155)
+
+local fontOptions = {
+    {text = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF"},
+    {text = "Arial", value = "Fonts\\ARIALN.TTF"},
+    {text = "Skurri", value = "Fonts\\skurri.ttf"},
+    {text = "Morpheus", value = "Fonts\\MORPHEUS.TTF"}
+}
+
+local function GetFontName(path)
+    for _, option in ipairs(fontOptions) do
+        if option.value == path then
+            return option.text
+        end
+    end
+    return "Friz Quadrata (Default)"
+end
+
+UIDropDownMenu_Initialize(fontDropdown, function(self, level)
+    for _, option in ipairs(fontOptions) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = option.text
+        info.value = option.value
+        info.func = function()
+            GuildInviteRequestDB.fontFace = option.value
+            UIDropDownMenu_SetText(fontDropdown, option.text)
+        end
+        UIDropDownMenu_AddButton(info)
     end
 end)
 
-local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
-closeBtn:SetSize(80, 22)
-closeBtn:SetPoint("BOTTOM", 45, 8)
-closeBtn:SetText("Close")
-closeBtn:SetScript("OnClick", function()
-    configFrame:Hide()
-end)
+UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
 
 -- Function to show config
 local function ShowConfig()
     RefreshFriendList()
+    ShowTab(1) -- Always start on Friends tab
     configFrame:Show()
 end
 
@@ -300,9 +429,15 @@ end
 SLASH_GUILDINVITEREQUEST1 = "/gir"
 SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     if msg == "reset" then
+        -- Reset to default values
         GuildInviteRequestDB.requested = false
+        GuildInviteRequestDB.preferredFriends = {}
+        GuildInviteRequestDB.fallbackGuild = ""
+        GuildInviteRequestDB.message = "Hey! Could I get a guild invite please? Thanks!"
+        GuildInviteRequestDB.fontSize = 12
+        GuildInviteRequestDB.fontFace = "Fonts\\FRIZQT__.TTF"
         hasChecked = false
-        print("|cff00ff00[" .. addonName .. "]|r Request status reset. Relog to trigger again.")
+        print("|cff00ff00[" .. addonName .. "]|r Configuration reset to defaults.")
     elseif msg == "check" then
         hasChecked = false
         CheckGuildStatus()
@@ -319,15 +454,13 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     elseif msg == "config" or msg == "settings" then
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 0.9")
+        print("|cff00ff00[" .. addonName .. "]|r Version 1.0")
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
         print("  /gir check - Manually check and request guild invite")
-        print("  /gir reset - Reset request status")
+        print("  /gir reset - Reset all settings to defaults")
         print("  /gir list - List all Battle.net friends")
         print("  /gir ver - Show addon version")
     end
 end
-
-print("|cff00ff00[" .. addonName .. "]|r Loaded. Use /gir config to manage preferred friends.")
