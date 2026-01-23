@@ -1,126 +1,158 @@
-local addonName = "GTInviteRequest"
+-- =========================================================
+-- GTInviteRequest.lua (Rewritten)
+-- =========================================================
+
+local addonName = ...
 local addonVersion = "dev"
 
 if C_AddOns and C_AddOns.GetAddOnMetadata then
     addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or addonVersion
 end
-local hasChecked = false
-local checkDelay = 5 -- seconds to wait after login before checking
-local waitingForWhoResults = false -- Flag to track if we're expecting /who results
 
 local frame = CreateFrame("Frame")
 
--- Saved variables (persists between sessions)
-GuildInviteRequestDB = GuildInviteRequestDB or {
+local checkDelay = 5
+local hasChecked = false
+local waitingForWhoResults = false
+
+-- =========================================================
+-- Saved Variables (with safe defaults merge)
+-- =========================================================
+
+local defaults = {
     requested = false,
-    preferredFriends = {}, -- Stored as BattleTags
+    preferredFriends = {},
     fallbackGuild = "",
     message = "Hey! Could I get a guild invite please? Thanks!",
     fontSize = 12,
-    fontFace = "Fonts\\FRIZQT__.TTF" -- Default WoW font
+    fontFace = "Fonts\\FRIZQT__.TTF"
 }
 
--- Function to find an online BNet friend playing WoW
+GuildInviteRequestDB = GuildInviteRequestDB or {}
+for k, v in pairs(defaults) do
+    if GuildInviteRequestDB[k] == nil then
+        GuildInviteRequestDB[k] = v
+    end
+end
+
+-- =========================================================
+-- Helpers
+-- =========================================================
+
+local function Normalize(str)
+    return str and str:lower():gsub("%s+", "") or ""
+end
+
+local function ResetRequestState()
+    GuildInviteRequestDB.requested = false
+    hasChecked = false
+end
+
+local DEFAULT_FONT = "Fonts\\FRIZQT__.TTF"
+
+local function ApplyFont(fs)
+    local face = GuildInviteRequestDB.fontFace or DEFAULT_FONT
+    local size = GuildInviteRequestDB.fontSize or 12
+
+    local ok = fs:SetFont(face, size)
+    if not ok then
+        fs:SetFont(DEFAULT_FONT, size)
+    end
+end
+
+-- =========================================================
+-- Find preferred BNet friend
+-- =========================================================
+
 local function FindOnlineBNetFriend()
-    local numBNetTotal, numBNetOnline = BNGetNumFriends()
-    
-    for _, preferredFriend in ipairs(GuildInviteRequestDB.preferredFriends) do
-        for i = 1, numBNetOnline do
-            local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-            
-            if accountInfo then
-                local battleTag = accountInfo.battleTag
-                local accountName = accountInfo.accountName
-                
-                -- Check if this is one of our preferred friends
-                if battleTag == preferredFriend or accountName == preferredFriend then
-                    -- Check if they're playing WoW
-                    if accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
-                        local gameInfo = accountInfo.gameAccountInfo
-                        if gameInfo.clientProgram == BNET_CLIENT_WOW then
-                            return gameInfo.characterName, gameInfo.realmName, battleTag, accountInfo.bnetAccountID
-                        end
+    local _, numOnline = BNGetNumFriends()
+
+    for _, preferred in ipairs(GuildInviteRequestDB.preferredFriends) do
+        local prefNorm = Normalize(preferred)
+
+        for i = 1, numOnline do
+            local info = C_BattleNet.GetFriendAccountInfo(i)
+            if info and info.gameAccountInfo and info.gameAccountInfo.isOnline then
+                if info.gameAccountInfo.clientProgram == BNET_CLIENT_WOW then
+                    if Normalize(info.battleTag) == prefNorm then
+                        return info.bnetAccountID, info.battleTag
                     end
                 end
             end
         end
     end
-    
-    return nil
 end
 
--- Function to check guild status and message friend
+-- =========================================================
+-- Core Logic
+-- =========================================================
+
 local function CheckGuildStatus()
     if hasChecked then return end
     hasChecked = true
-    
-    -- Check if player is in a guild
-    local guildName = GetGuildInfo("player")
-    
-    if not guildName and not GuildInviteRequestDB.requested then
-        -- Not in a guild and haven't requested yet
-        local charName, realmName, battleTag, bnetID = FindOnlineBNetFriend()
-        
-        if charName and bnetID then
-            -- Send Battle.net whisper
-            BNSendWhisper(bnetID, GuildInviteRequestDB.message)
-            
-            -- Mark as requested
-            GuildInviteRequestDB.requested = true
-            
-            print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. battleTag .. " via Battle.net")
-        else
-            -- No BNet friends online, try /who for the fallback guild
-            print("|cff00ff00[" .. addonName .. "]|r No Battle.net friends online, searching for '" .. GuildInviteRequestDB.fallbackGuild .. "' members...")
-            waitingForWhoResults = true
-            C_Timer.After(1, function()
-                C_FriendList.SendWho("g-\"" .. GuildInviteRequestDB.fallbackGuild .. "\"")
-            end)
-        end
-    elseif guildName then
-        print("|cff00ff00[" .. addonName .. "]|r You're already in a guild: " .. guildName)
-        GuildInviteRequestDB.requested = false -- Reset for future use
+
+    if IsInGuild() then
+        GuildInviteRequestDB.requested = false
+        return
+    end
+
+    if GuildInviteRequestDB.requested then return end
+
+    local bnetID, battleTag = FindOnlineBNetFriend()
+    if bnetID then
+        BNSendWhisper(bnetID, GuildInviteRequestDB.message)
+        GuildInviteRequestDB.requested = true
+        print("|cff00ff00[" .. addonName .. "]|r Invite requested from " .. battleTag)
+        return
+    end
+
+    if GuildInviteRequestDB.fallbackGuild ~= "" then
+        waitingForWhoResults = true
+        C_Timer.After(1, function()
+            C_FriendList.SendWho("g-\"" .. GuildInviteRequestDB.fallbackGuild .. "\"")
+        end)
     end
 end
 
--- Event handler
+-- =========================================================
+-- Events
+-- =========================================================
+
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("GUILD_ROSTER_UPDATE")
-frame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
 frame:RegisterEvent("WHO_LIST_UPDATE")
 
-frame:SetScript("OnEvent", function(self, event, ...)
+frame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_ENTERING_WORLD" then
-        -- Wait a bit for game data to load
         C_Timer.After(checkDelay, CheckGuildStatus)
+
     elseif event == "GUILD_ROSTER_UPDATE" then
-        -- If we join a guild, reset the requested flag
-        local guildName = GetGuildInfo("player")
-        if guildName then
+        if IsInGuild() then
             GuildInviteRequestDB.requested = false
         end
+
     elseif event == "WHO_LIST_UPDATE" then
-        -- Process /who results only if we triggered it
-        if not waitingForWhoResults then return end
+        if not waitingForWhoResults or GuildInviteRequestDB.requested then return end
         waitingForWhoResults = false
-        
-        if GuildInviteRequestDB.requested then return end
-        
-        local numWho = C_FriendList.GetNumWhoResults()
-        if numWho > 0 then
-            local whoInfo = C_FriendList.GetWhoInfo(1)
-            if whoInfo and whoInfo.fullName then
-                SendChatMessage(GuildInviteRequestDB.message, "WHISPER", nil, whoInfo.fullName)
+
+        local num = C_FriendList.GetNumWhoResults()
+        if num > 0 then
+            local who = C_FriendList.GetWhoInfo(1)
+            if who and who.fullName then
+                SendChatMessage(GuildInviteRequestDB.message, "WHISPER", nil, who.fullName)
                 GuildInviteRequestDB.requested = true
-                print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. GuildInviteRequestDB.fallbackGuild .. ")")
+                print("|cff00ff00[" .. addonName .. "]|r Invite requested from " .. who.fullName)
             end
         else
-            print("|cffff0000[" .. addonName .. "]|r No members of '" .. GuildInviteRequestDB.fallbackGuild .. "' found online.")
+            print("|cffff0000[" .. addonName .. "]|r No members found for fallback guild.")
         end
     end
 end)
 
--- Create Config GUI
+-- =========================================================
+-- Config UI
+-- =========================================================
+
 local configFrame = CreateFrame("Frame", "GTInviteRequestConfig", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(450, 500)
 configFrame:SetPoint("CENTER")
@@ -131,306 +163,168 @@ configFrame:SetScript("OnDragStart", configFrame.StartMoving)
 configFrame:SetScript("OnDragStop", configFrame.StopMovingOrSizing)
 configFrame:Hide()
 
-configFrame.title = configFrame:CreateFontString(nil, "OVERLAY")
-configFrame.title:SetFontObject("GameFontHighlight")
-configFrame.title:SetPoint("TOP", configFrame.TitleBg, "TOP", 0, -5)
-configFrame.title:SetText("Glamour Toad Invite Request - Settings")
+local title = configFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+title:SetPoint("TOP", 0, -8)
+title:SetText("Glamour Toad Invite Request")
+ApplyFont(fs)
 
--- Create tab buttons
-local tabButtons = {}
-local currentTab = 1
+-- =========================================================
+-- Tabs
+-- =========================================================
 
-local function CreateTabButton(index, text, xOffset)
-    local btn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
-    btn:SetSize(100, 25)
-    btn:SetPoint("TOPLEFT", 20 + xOffset, -30)
-    btn:SetText(text)
-    btn.tabIndex = index
-    return btn
-end
-
-tabButtons[1] = CreateTabButton(1, "Friends", 0)
-tabButtons[2] = CreateTabButton(2, "Guild", 110)
-tabButtons[3] = CreateTabButton(3, "Message", 220)
-tabButtons[4] = CreateTabButton(4, "Settings", 330)
-
--- Create content frames for each tab
-local friendsFrame = CreateFrame("Frame", nil, configFrame)
-friendsFrame:SetPoint("TOPLEFT", 15, -65)
-friendsFrame:SetPoint("BOTTOMRIGHT", -15, 15)
-friendsFrame:Hide()
-
-local guildFrame = CreateFrame("Frame", nil, configFrame)
-guildFrame:SetPoint("TOPLEFT", 15, -65)
-guildFrame:SetPoint("BOTTOMRIGHT", -15, 15)
-guildFrame:Hide()
-
-local messageFrame = CreateFrame("Frame", nil, configFrame)
-messageFrame:SetPoint("TOPLEFT", 15, -65)
-messageFrame:SetPoint("BOTTOMRIGHT", -15, 15)
-messageFrame:Hide()
-
-local settingsFrame = CreateFrame("Frame", nil, configFrame)
-settingsFrame:SetPoint("TOPLEFT", 15, -65)
-settingsFrame:SetPoint("BOTTOMRIGHT", -15, 15)
-settingsFrame:Hide()
-
-local tabFrames = {friendsFrame, guildFrame, messageFrame, settingsFrame}
-
--- Tab switching function
-local function ShowTab(index)
-    currentTab = index
-    for i, frame in ipairs(tabFrames) do
-        frame:Hide()
-    end
-    tabFrames[index]:Show()
-    
-    -- Update button states
-    for i, btn in ipairs(tabButtons) do
-        if i == index then
-            btn:Disable()
-        else
-            btn:Enable()
-        end
+local tabs, frames = {}, {}
+local function ShowTab(i)
+    for idx, f in ipairs(frames) do
+        f:SetShown(idx == i)
+        tabs[idx]:SetEnabled(idx ~= i)
     end
 end
 
--- Set up tab button clicks
-for i, btn in ipairs(tabButtons) do
-    btn:SetScript("OnClick", function()
-        ShowTab(btn.tabIndex)
-    end)
+local function CreateTab(i, text, x)
+    local b = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+    b:SetSize(100, 25)
+    b:SetPoint("TOPLEFT", 20 + x, -30)
+    b:SetText(text)
+    b:SetScript("OnClick", function() ShowTab(i) end)
+    tabs[i] = b
 end
 
--- FRIENDS TAB CONTENT
-local friendsInstructions = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-friendsInstructions:SetPoint("TOPLEFT", 5, -5)
-friendsInstructions:SetText("Add Battle.net friends (in order of preference):")
+CreateTab(1, "Friends", 0)
+CreateTab(2, "Guild", 110)
+CreateTab(3, "Message", 220)
+CreateTab(4, "Settings", 330)
 
--- Scroll frame for friend list
-local scrollFrame = CreateFrame("ScrollFrame", nil, friendsFrame, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", 5, -30)
-scrollFrame:SetPoint("BOTTOMRIGHT", -25, 55)
+for i = 1, 4 do
+    local f = CreateFrame("Frame", nil, configFrame)
+    f:SetPoint("TOPLEFT", 15, -65)
+    f:SetPoint("BOTTOMRIGHT", -15, 15)
+    f:Hide()
+    frames[i] = f
+end
 
-local scrollChild = CreateFrame("Frame")
-scrollFrame:SetScrollChild(scrollChild)
-scrollChild:SetWidth(scrollFrame:GetWidth())
-scrollChild:SetHeight(1)
+-- =========================================================
+-- Friends Tab
+-- =========================================================
 
--- Function to refresh the friend list display
+local friendsFrame = frames[1]
+
+local label = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+label:SetPoint("TOPLEFT", 5, -5)
+label:SetText("Preferred Battle.net Friends (top = first tried)")
+ApplyFont(fs)
+
 local function RefreshFriendList()
-    -- Clear existing elements
-    for _, child in ipairs({scrollChild:GetChildren()}) do
-        child:Hide()
-        child:SetParent(nil)
+    for _, c in ipairs({friendsFrame:GetChildren()}) do
+        if c.row then c:Hide() end
     end
-    
-    local yOffset = 0
-    
-    for i, battleTag in ipairs(GuildInviteRequestDB.preferredFriends) do
-        local row = CreateFrame("Frame", nil, scrollChild)
-        row:SetSize(360, 30)
-        row:SetPoint("TOPLEFT", 5, -yOffset)
-        
-        -- Number label
-        local numLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        numLabel:SetPoint("LEFT", 0, 0)
-        numLabel:SetText(i .. ".")
-        
-        -- Friend name
-        local nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        nameLabel:SetPoint("LEFT", 20, 0)
-        nameLabel:SetText(battleTag)
-        
-        -- Up button
-        local upBtn = CreateFrame("Button", nil, row, "UIPanelScrollUpButtonTemplate")
-        upBtn:SetSize(20, 20)
-        upBtn:SetPoint("RIGHT", -125, 0)
-        if i == 1 then
-            upBtn:Disable()
-        else
-            upBtn:SetScript("OnClick", function()
-                -- Swap with previous
-                GuildInviteRequestDB.preferredFriends[i], GuildInviteRequestDB.preferredFriends[i-1] = 
-                    GuildInviteRequestDB.preferredFriends[i-1], GuildInviteRequestDB.preferredFriends[i]
-                RefreshFriendList()
-            end)
-        end
-        
-        -- Down button
-        local downBtn = CreateFrame("Button", nil, row, "UIPanelScrollDownButtonTemplate")
-        downBtn:SetSize(20, 20)
-        downBtn:SetPoint("RIGHT", -100, 0)
-        if i == #GuildInviteRequestDB.preferredFriends then
-            downBtn:Disable()
-        else
-            downBtn:SetScript("OnClick", function()
-                -- Swap with next
-                GuildInviteRequestDB.preferredFriends[i], GuildInviteRequestDB.preferredFriends[i+1] = 
-                    GuildInviteRequestDB.preferredFriends[i+1], GuildInviteRequestDB.preferredFriends[i]
-                RefreshFriendList()
-            end)
-        end
-        
-        -- Remove button
-        local removeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        removeBtn:SetSize(60, 22)
-        removeBtn:SetPoint("RIGHT", 0, 0)
-        removeBtn:SetText("Remove")
-        removeBtn:SetScript("OnClick", function()
+
+    local y = -30
+    for i, tag in ipairs(GuildInviteRequestDB.preferredFriends) do
+        local row = CreateFrame("Frame", nil, friendsFrame)
+        row.row = true
+        row:SetSize(360, 24)
+        row:SetPoint("TOPLEFT", 5, y)
+
+        local txt = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        txt:SetPoint("LEFT")
+        txt:SetText(i .. ". " .. tag)
+        ApplyFont(fs)
+
+        local del = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        del:SetSize(60, 20)
+        del:SetPoint("RIGHT")
+        del:SetText("Remove")
+        del:SetScript("OnClick", function()
             table.remove(GuildInviteRequestDB.preferredFriends, i)
+            ResetRequestState()
             RefreshFriendList()
         end)
-        
-        yOffset = yOffset + 35
+
+        y = y - 28
     end
-    
-    scrollChild:SetHeight(math.max(yOffset, 1))
 end
 
--- Add friend section
-local addFriendLabel = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-addFriendLabel:SetPoint("BOTTOMLEFT", 5, 30)
-addFriendLabel:SetText("Add BattleTag:")
+local addBox = CreateFrame("EditBox", nil, friendsFrame, "InputBoxTemplate")
+addBox:SetPoint("BOTTOMLEFT", 5, 5)
+addBox:SetSize(260, 20)
+addBox:SetAutoFocus(false)
 
-local addFriendBox = CreateFrame("EditBox", nil, friendsFrame, "InputBoxTemplate")
-addFriendBox:SetPoint("BOTTOMLEFT", 5, 5)
-addFriendBox:SetPoint("BOTTOMRIGHT", -90, 5)
-addFriendBox:SetHeight(20)
-addFriendBox:SetAutoFocus(false)
-
-local addFriendBtn = CreateFrame("Button", nil, friendsFrame, "UIPanelButtonTemplate")
-addFriendBtn:SetSize(80, 22)
-addFriendBtn:SetPoint("BOTTOMRIGHT", -5, 5)
-addFriendBtn:SetText("Add")
-addFriendBtn:SetScript("OnClick", function()
-    local text = addFriendBox:GetText()
-    if text and text ~= "" then
-        table.insert(GuildInviteRequestDB.preferredFriends, text)
-        addFriendBox:SetText("")
+local addBtn = CreateFrame("Button", nil, friendsFrame, "UIPanelButtonTemplate")
+addBtn:SetPoint("LEFT", addBox, "RIGHT", 5, 0)
+addBtn:SetSize(80, 22)
+addBtn:SetText("Add")
+addBtn:SetScript("OnClick", function()
+    local t = addBox:GetText()
+    if t ~= "" then
+        table.insert(GuildInviteRequestDB.preferredFriends, t)
+        addBox:SetText("")
+        ResetRequestState()
         RefreshFriendList()
     end
 end)
 
--- GUILD TAB CONTENT
-local guildInstructions = guildFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-guildInstructions:SetPoint("TOP", 0, -20)
-guildInstructions:SetText("Fallback Guild Name:")
+-- =========================================================
+-- Guild Tab
+-- =========================================================
 
-local guildSubtext = guildFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-guildSubtext:SetPoint("TOP", 0, -40)
-guildSubtext:SetText("If no Battle.net friends are online, the addon will\nsearch for members of this guild to whisper.")
+local guildFrame = frames[2]
 
 local guildBox = CreateFrame("EditBox", nil, guildFrame, "InputBoxTemplate")
-guildBox:SetPoint("TOP", 0, -80)
+guildBox:SetPoint("TOP", 0, -60)
 guildBox:SetSize(300, 20)
 guildBox:SetAutoFocus(false)
-guildBox:SetText(GuildInviteRequestDB.fallbackGuild)
+
 guildBox:SetScript("OnEnterPressed", function(self)
     GuildInviteRequestDB.fallbackGuild = self:GetText()
-    self:ClearFocus()
-    print("|cff00ff00[" .. addonName .. "]|r Fallback guild set to: " .. GuildInviteRequestDB.fallbackGuild)
-end)
-guildBox:SetScript("OnEscapePressed", function(self)
-    self:SetText(GuildInviteRequestDB.fallbackGuild)
+    ResetRequestState()
     self:ClearFocus()
 end)
 
--- MESSAGE TAB CONTENT
-local messageInstructions = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-messageInstructions:SetPoint("TOP", 0, -20)
-messageInstructions:SetText("Customize Your Invite Message:")
+-- =========================================================
+-- Message Tab
+-- =========================================================
 
-local messageSubtext = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-messageSubtext:SetPoint("TOP", 0, -40)
-messageSubtext:SetText("This message will be sent when requesting a guild invite.\nPress Enter to save, Escape to cancel.")
+local messageFrame = frames[3]
 
 local messageBox = CreateFrame("EditBox", nil, messageFrame, "InputBoxTemplate")
-messageBox:SetPoint("TOP", 0, -80)
+messageBox:SetPoint("TOP", 0, -60)
 messageBox:SetSize(380, 20)
 messageBox:SetAutoFocus(false)
-messageBox:SetText(GuildInviteRequestDB.message)
+
 messageBox:SetScript("OnEnterPressed", function(self)
     GuildInviteRequestDB.message = self:GetText()
-    self:ClearFocus()
-    print("|cff00ff00[" .. addonName .. "]|r Message updated to: " .. GuildInviteRequestDB.message)
-end)
-messageBox:SetScript("OnEscapePressed", function(self)
-    self:SetText(GuildInviteRequestDB.message)
+    ResetRequestState()
     self:ClearFocus()
 end)
 
--- SETTINGS TAB CONTENT
-local settingsInstructions = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-settingsInstructions:SetPoint("TOP", 0, -20)
-settingsInstructions:SetText("Addon Settings:")
+-- =========================================================
+-- Settings Tab
+-- =========================================================
 
--- Font Size
-local fontSizeLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-fontSizeLabel:SetPoint("TOPLEFT", 20, -60)
-fontSizeLabel:SetText("Font Size:")
+local settingsFrame = frames[4]
 
-local fontSizeSlider = CreateFrame("Slider", nil, settingsFrame, "OptionsSliderTemplate")
-fontSizeSlider:SetPoint("TOPLEFT", 20, -85)
-fontSizeSlider:SetMinMaxValues(8, 24)
-fontSizeSlider:SetValue(GuildInviteRequestDB.fontSize)
-fontSizeSlider:SetValueStep(1)
-fontSizeSlider:SetObeyStepOnDrag(true)
-fontSizeSlider.Low:SetText("8")
-fontSizeSlider.High:SetText("24")
-fontSizeSlider.Text:SetText("Size: " .. GuildInviteRequestDB.fontSize)
-fontSizeSlider:SetScript("OnValueChanged", function(self, value)
-    GuildInviteRequestDB.fontSize = value
-    self.Text:SetText("Size: " .. value)
+local sizeSlider = CreateFrame("Slider", nil, settingsFrame, "OptionsSliderTemplate")
+sizeSlider:SetPoint("TOPLEFT", 20, -60)
+sizeSlider:SetMinMaxValues(8, 24)
+sizeSlider:SetValueStep(1)
+sizeSlider:SetScript("OnValueChanged", function(_, v)
+    GuildInviteRequestDB.fontSize = v
+    ResetRequestState()
 end)
 
--- Font Face
-local fontFaceLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-fontFaceLabel:SetPoint("TOPLEFT", 20, -140)
-fontFaceLabel:SetText("Font Face:")
+-- =========================================================
+-- Show Config
+-- =========================================================
 
-local fontDropdown = CreateFrame("Frame", "GTIRFontDropdown", settingsFrame, "UIDropDownMenuTemplate")
-fontDropdown:SetPoint("TOPLEFT", 0, -155)
-
-local fontOptions = {
-    {text = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF"},
-    {text = "Arial", value = "Fonts\\ARIALN.TTF"},
-    {text = "Skurri", value = "Fonts\\skurri.ttf"},
-    {text = "Morpheus", value = "Fonts\\MORPHEUS.TTF"}
-}
-
-local function GetFontName(path)
-    for _, option in ipairs(fontOptions) do
-        if option.value == path then
-            return option.text
-        end
-    end
-    return "Friz Quadrata (Default)"
-end
-
-UIDropDownMenu_Initialize(fontDropdown, function(self, level)
-    for _, option in ipairs(fontOptions) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = option.text
-        info.value = option.value
-        info.func = function()
-            GuildInviteRequestDB.fontFace = option.value
-            UIDropDownMenu_SetText(fontDropdown, option.text)
-        end
-        UIDropDownMenu_AddButton(info)
-    end
-end)
-
-UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
-
--- Function to show config
 local function ShowConfig()
+    guildBox:SetText(GuildInviteRequestDB.fallbackGuild)
+    messageBox:SetText(GuildInviteRequestDB.message)
+    sizeSlider:SetValue(GuildInviteRequestDB.fontSize)
     RefreshFriendList()
-    ShowTab(1) -- Always start on Friends tab
+    ShowTab(1)
     configFrame:Show()
 end
 
--- Slash command to manually trigger, reset, or list BNet friends
 SLASH_GUILDINVITEREQUEST1 = "/gir"
 SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     if msg == "reset" then
