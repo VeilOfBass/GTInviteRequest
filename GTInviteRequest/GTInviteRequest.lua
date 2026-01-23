@@ -17,7 +17,8 @@ GuildInviteRequestDB = GuildInviteRequestDB or {
     fallbackGuild = "",
     message = "Hey! Could I get a guild invite please? Thanks!",
     uiScale = 1.0,
-    fontFace = "Fonts\\FRIZQT__.TTF" -- Default WoW font
+    fontFace = "Fonts\\FRIZQT__.TTF", -- Default WoW font
+    hiddenMode = false -- Prevents addon from sending any messages
 }
 
 -- Function to apply custom font to a font string
@@ -79,13 +80,16 @@ local function CheckGuildStatus()
         local charName, realmName, battleTag, bnetID = FindOnlineBNetFriend()
         
         if charName and bnetID then
-            -- Send Battle.net whisper
-            BNSendWhisper(bnetID, GuildInviteRequestDB.message)
+            if GuildInviteRequestDB.hiddenMode then
+                print("|cff00ff00[" .. addonName .. "]|r Hidden mode enabled - guild invite NOT sent to " .. battleTag)
+            else
+                -- Send Battle.net whisper
+                BNSendWhisper(bnetID, GuildInviteRequestDB.message)
+                print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. battleTag .. " via Battle.net")
+            end
             
             -- Mark as requested
             GuildInviteRequestDB.requested = true
-            
-            print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. battleTag .. " via Battle.net")
         else
             -- No BNet friends online, try /who for the fallback guild
             if GuildInviteRequestDB.fallbackGuild ~= "" then
@@ -133,9 +137,13 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if numWho > 0 then
             local whoInfo = C_FriendList.GetWhoInfo(1)
             if whoInfo and whoInfo.fullName then
-                SendChatMessage(GuildInviteRequestDB.message, "WHISPER", nil, whoInfo.fullName)
+                if GuildInviteRequestDB.hiddenMode then
+                    print("|cff00ff00[" .. addonName .. "]|r Hidden mode enabled - guild invite NOT sent to " .. whoInfo.fullName)
+                else
+                    SendChatMessage(GuildInviteRequestDB.message, "WHISPER", nil, whoInfo.fullName)
+                    print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. GuildInviteRequestDB.fallbackGuild .. ")")
+                end
                 GuildInviteRequestDB.requested = true
-                print("|cff00ff00[" .. addonName .. "]|r Guild invite requested from " .. whoInfo.fullName .. " (from " .. GuildInviteRequestDB.fallbackGuild .. ")")
             end
         else
             print("|cffff0000[" .. addonName .. "]|r No members of '" .. GuildInviteRequestDB.fallbackGuild .. "' found online.")
@@ -165,6 +173,9 @@ configFrame:SetScale(GuildInviteRequestDB.uiScale)
 -- Store all font strings and buttons to update
 local allFontStrings = {}
 local allButtons = {}
+
+-- Forward declare UI elements that need to be referenced in functions
+local hiddenModeCheckbox
 
 -- Create tab buttons
 local tabButtons = {}
@@ -475,6 +486,35 @@ local function GetFontName(path)
 end
 
 local function InitializeFontDropdown()
+
+-- Hidden Mode Toggle
+local hiddenModeLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hiddenModeLabel:SetPoint("TOPLEFT", 20, -200)
+hiddenModeLabel:SetText("Hidden Mode:")
+table.insert(allFontStrings, hiddenModeLabel)
+
+local hiddenModeSubtext = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+hiddenModeSubtext:SetPoint("TOPLEFT", 20, -220)
+hiddenModeSubtext:SetText("When enabled, the addon will NOT send any messages.\nUseful for testing or when you don't want to spam requests.")
+table.insert(allFontStrings, hiddenModeSubtext)
+
+hiddenModeCheckbox = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
+hiddenModeCheckbox:SetPoint("TOPLEFT", 20, -250)
+hiddenModeCheckbox:SetSize(24, 24)
+hiddenModeCheckbox:SetChecked(GuildInviteRequestDB.hiddenMode)
+hiddenModeCheckbox:SetScript("OnClick", function(self)
+    GuildInviteRequestDB.hiddenMode = self:GetChecked()
+    if GuildInviteRequestDB.hiddenMode then
+        print("|cff00ff00[" .. addonName .. "]|r Hidden mode ENABLED - addon will NOT send messages")
+    else
+        print("|cff00ff00[" .. addonName .. "]|r Hidden mode DISABLED - addon will send messages normally")
+    end
+end)
+
+local hiddenModeCheckboxLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hiddenModeCheckboxLabel:SetPoint("LEFT", hiddenModeCheckbox, "RIGHT", 5, 0)
+hiddenModeCheckboxLabel:SetText("Enable Hidden Mode")
+table.insert(allFontStrings, hiddenModeCheckboxLabel)
     UIDropDownMenu_Initialize(fontDropdown, function(self, level)
         local fonts = GetAvailableFonts()
         for _, font in ipairs(fonts) do
@@ -511,6 +551,9 @@ local function ShowConfig()
     -- Refresh font dropdown to show current selection
     UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
     
+    -- Update hidden mode checkbox
+    hiddenModeCheckbox:SetChecked(GuildInviteRequestDB.hiddenMode)
+    
     -- Apply saved fonts when opening config
     for _, fs in ipairs(allFontStrings) do
         ApplyCustomFont(fs)
@@ -534,6 +577,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
         GuildInviteRequestDB.message = "Hey! Could I get a guild invite please? Thanks!"
         GuildInviteRequestDB.uiScale = 1.0
         GuildInviteRequestDB.fontFace = "Fonts\\FRIZQT__.TTF"
+        GuildInviteRequestDB.hiddenMode = false
         hasChecked = false
         
         -- Update UI if config is open
@@ -541,6 +585,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
             uiScaleSlider:SetValue(1.0)
             configFrame:SetScale(1.0)
             UIDropDownMenu_SetText(fontDropdown, "Friz Quadrata (Default)")
+            hiddenModeCheckbox:SetChecked(false)
             guildBox:SetText("")
             messageBox:SetText("Hey! Could I get a guild invite please? Thanks!")
             for _, fs in ipairs(allFontStrings) do
