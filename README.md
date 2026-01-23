@@ -18,6 +18,7 @@
 * /gir reset - Reset config to default values
 * /gir list - List all Battle.net friends with online status
 * /gir ver - Show addon version
+* /gir rt - Retry invite message without reloading
 
 
 
