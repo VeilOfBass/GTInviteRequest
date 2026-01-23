@@ -1,3 +1,6 @@
+# Version 0.9 [January 23 2026]
+* Added customizable invite message field to config UI
+
 # Version 0.8 [January 22 2026]
 * Removed redundant fallbackGuildName local variable
 
