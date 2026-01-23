@@ -1,4 +1,7 @@
-# Version 1.2 [January 23 2026]
+# Version 1.3 [January 23 2026]
+* Added Hidden Mode toggle to prevent addon from sending any messages.
+
+## Version 1.2 [January 23 2026]
 * Fixed /gir check not printing messages to chat.
 * Text boxes now display saved values instead of defaults when opening config menu
 * Replaced Font Size slider with UI Scale slider (50%-150%)
