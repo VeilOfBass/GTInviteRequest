@@ -27,6 +27,16 @@ local function ApplyCustomFont(fontString)
     end
 end
 
+-- Function to apply custom font to buttons
+local function ApplyCustomFontToButton(button)
+    if button and button.GetFontString then
+        local fontString = button:GetFontString()
+        if fontString then
+            ApplyCustomFont(fontString)
+        end
+    end
+end
+
 -- Function to find an online BNet friend playing WoW
 local function FindOnlineBNetFriend()
     local numBNetTotal, numBNetOnline = BNGetNumFriends()
@@ -152,6 +162,10 @@ configFrame.title:SetText("Glamour Toad Invite Request - Settings")
 -- Apply UI scale
 configFrame:SetScale(GuildInviteRequestDB.uiScale)
 
+-- Store all font strings and buttons to update
+local allFontStrings = {}
+local allButtons = {}
+
 -- Create tab buttons
 local tabButtons = {}
 local currentTab = 1
@@ -162,6 +176,7 @@ local function CreateTabButton(index, text, xOffset)
     btn:SetPoint("TOPLEFT", 15 + xOffset, -35)
     btn:SetText(text)
     btn.tabIndex = index
+    table.insert(allButtons, btn)
     return btn
 end
 
@@ -193,9 +208,6 @@ settingsFrame:Hide()
 
 local tabFrames = {friendsFrame, guildFrame, messageFrame, settingsFrame}
 
--- Store all font strings to update
-local allFontStrings = {}
-
 -- Tab switching function
 local function ShowTab(index)
     currentTab = index
@@ -219,6 +231,7 @@ for i, btn in ipairs(tabButtons) do
     btn:SetScript("OnClick", function()
         ShowTab(btn.tabIndex)
     end)
+    ApplyCustomFontToButton(btn)
 end
 
 -- FRIENDS TAB CONTENT
@@ -303,6 +316,7 @@ local function RefreshFriendList()
             table.remove(GuildInviteRequestDB.preferredFriends, i)
             RefreshFriendList()
         end)
+        ApplyCustomFontToButton(removeBtn)
         
         yOffset = yOffset + 35
     end
@@ -334,6 +348,7 @@ addFriendBtn:SetScript("OnClick", function()
         RefreshFriendList()
     end
 end)
+table.insert(allButtons, addFriendBtn)
 
 -- GUILD TAB CONTENT
 local guildInstructions = guildFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -418,44 +433,74 @@ fontFaceLabel:SetPoint("TOPLEFT", 20, -140)
 fontFaceLabel:SetText("Font Face:")
 table.insert(allFontStrings, fontFaceLabel)
 
+-- Function to get all available fonts
+local function GetAvailableFonts()
+    local fonts = {
+        {name = "Friz Quadrata (Default)", path = "Fonts\\FRIZQT__.TTF"},
+        {name = "Arial", path = "Fonts\\ARIALN.TTF"},
+        {name = "Skurri", path = "Fonts\\skurri.ttf"},
+        {name = "Morpheus", path = "Fonts\\MORPHEUS.TTF"},
+    }
+    
+    -- Check for LibSharedMedia fonts
+    if LibStub then
+        local LSM = LibStub("LibSharedMedia-3.0", true)
+        if LSM then
+            local mediaFonts = LSM:List("font")
+            if mediaFonts then
+                for _, fontName in pairs(mediaFonts) do
+                    local fontPath = LSM:Fetch("font", fontName)
+                    if fontPath then
+                        table.insert(fonts, {name = fontName .. " (LSM)", path = fontPath})
+                    end
+                end
+            end
+        end
+    end
+    
+    return fonts
+end
+
 local fontDropdown = CreateFrame("Frame", "GTIRFontDropdown", settingsFrame, "UIDropDownMenuTemplate")
 fontDropdown:SetPoint("TOPLEFT", 0, -155)
 
-local fontOptions = {
-    {text = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF"},
-    {text = "Arial", value = "Fonts\\ARIALN.TTF"},
-    {text = "Skurri", value = "Fonts\\skurri.ttf"},
-    {text = "Morpheus", value = "Fonts\\MORPHEUS.TTF"}
-}
-
 local function GetFontName(path)
-    for _, option in ipairs(fontOptions) do
-        if option.value == path then
-            return option.text
+    local fonts = GetAvailableFonts()
+    for _, font in ipairs(fonts) do
+        if font.path == path then
+            return font.name
         end
     end
     return "Friz Quadrata (Default)"
 end
 
-UIDropDownMenu_Initialize(fontDropdown, function(self, level)
-    for _, option in ipairs(fontOptions) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = option.text
-        info.value = option.value
-        info.func = function()
-            GuildInviteRequestDB.fontFace = option.value
-            UIDropDownMenu_SetText(fontDropdown, option.text)
-            -- Apply new font face to all font strings
-            for _, fs in ipairs(allFontStrings) do
-                ApplyCustomFont(fs)
+local function InitializeFontDropdown()
+    UIDropDownMenu_Initialize(fontDropdown, function(self, level)
+        local fonts = GetAvailableFonts()
+        for _, font in ipairs(fonts) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = font.name
+            info.value = font.path
+            info.func = function()
+                GuildInviteRequestDB.fontFace = font.path
+                UIDropDownMenu_SetText(fontDropdown, font.name)
+                -- Apply new font face to all font strings
+                for _, fs in ipairs(allFontStrings) do
+                    ApplyCustomFont(fs)
+                end
+                -- Apply new font to all buttons
+                for _, btn in ipairs(allButtons) do
+                    ApplyCustomFontToButton(btn)
+                end
+                RefreshFriendList()
             end
-            RefreshFriendList() -- Refresh to apply to friend list items
+            UIDropDownMenu_AddButton(info)
         end
-        UIDropDownMenu_AddButton(info)
-    end
-end)
+    end)
+    UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
+end
 
-UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
+InitializeFontDropdown()
 
 -- Function to show config
 local function ShowConfig()
@@ -463,9 +508,15 @@ local function ShowConfig()
     guildBox:SetText(GuildInviteRequestDB.fallbackGuild)
     messageBox:SetText(GuildInviteRequestDB.message)
     
+    -- Refresh font dropdown to show current selection
+    UIDropDownMenu_SetText(fontDropdown, GetFontName(GuildInviteRequestDB.fontFace))
+    
     -- Apply saved fonts when opening config
     for _, fs in ipairs(allFontStrings) do
         ApplyCustomFont(fs)
+    end
+    for _, btn in ipairs(allButtons) do
+        ApplyCustomFontToButton(btn)
     end
     RefreshFriendList()
     ShowTab(1) -- Always start on Friends tab
@@ -494,6 +545,9 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
             messageBox:SetText("Hey! Could I get a guild invite please? Thanks!")
             for _, fs in ipairs(allFontStrings) do
                 ApplyCustomFont(fs)
+            end
+            for _, btn in ipairs(allButtons) do
+                ApplyCustomFontToButton(btn)
             end
             RefreshFriendList()
         end
