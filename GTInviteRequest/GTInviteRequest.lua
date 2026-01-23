@@ -495,7 +495,7 @@ table.insert(allFontStrings, hiddenModeLabel)
 
 local hiddenModeSubtext = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 hiddenModeSubtext:SetPoint("TOPLEFT", 20, -220)
-hiddenModeSubtext:SetText("When enabled, the addon will NOT send any messages.\nUseful for testing or when you don't want to spam requests.")
+hiddenModeSubtext:SetText("When enabled, the addon will NOT send any messages.\nUseful for testing, when you don't want to spam requests, or when you want to stay HIDDEN.")
 table.insert(allFontStrings, hiddenModeSubtext)
 
 hiddenModeCheckbox = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
