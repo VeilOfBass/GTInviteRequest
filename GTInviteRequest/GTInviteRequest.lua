@@ -486,35 +486,6 @@ local function GetFontName(path)
 end
 
 local function InitializeFontDropdown()
-
--- Hidden Mode Toggle
-local hiddenModeLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-hiddenModeLabel:SetPoint("TOPLEFT", 20, -200)
-hiddenModeLabel:SetText("Hidden Mode:")
-table.insert(allFontStrings, hiddenModeLabel)
-
-local hiddenModeSubtext = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-hiddenModeSubtext:SetPoint("TOPLEFT", 20, -220)
-hiddenModeSubtext:SetText("When enabled, the addon will NOT send any messages.\nUseful for testing, when you don't want to spam requests, or when you want to stay HIDDEN.")
-table.insert(allFontStrings, hiddenModeSubtext)
-
-hiddenModeCheckbox = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
-hiddenModeCheckbox:SetPoint("TOPLEFT", 20, -250)
-hiddenModeCheckbox:SetSize(24, 24)
-hiddenModeCheckbox:SetChecked(GuildInviteRequestDB.hiddenMode)
-hiddenModeCheckbox:SetScript("OnClick", function(self)
-    GuildInviteRequestDB.hiddenMode = self:GetChecked()
-    if GuildInviteRequestDB.hiddenMode then
-        print("|cff00ff00[" .. addonName .. "]|r Hidden mode ENABLED - addon will NOT send messages")
-    else
-        print("|cff00ff00[" .. addonName .. "]|r Hidden mode DISABLED - addon will send messages normally")
-    end
-end)
-
-local hiddenModeCheckboxLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-hiddenModeCheckboxLabel:SetPoint("LEFT", hiddenModeCheckbox, "RIGHT", 5, 0)
-hiddenModeCheckboxLabel:SetText("Enable Hidden Mode")
-table.insert(allFontStrings, hiddenModeCheckboxLabel)
     UIDropDownMenu_Initialize(fontDropdown, function(self, level)
         local fonts = GetAvailableFonts()
         for _, font in ipairs(fonts) do
@@ -541,6 +512,37 @@ table.insert(allFontStrings, hiddenModeCheckboxLabel)
 end
 
 InitializeFontDropdown()
+
+-- Hidden Mode Toggle
+local hiddenModeLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hiddenModeLabel:SetPoint("TOPLEFT", 20, -200)
+hiddenModeLabel:SetText("Hidden Mode:")
+table.insert(allFontStrings, hiddenModeLabel)
+
+local hiddenModeSubtext = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+hiddenModeSubtext:SetPoint("TOPLEFT", 20, -220)
+hiddenModeSubtext:SetWidth(390)
+hiddenModeSubtext:SetJustifyH("LEFT")
+hiddenModeSubtext:SetText("When enabled, the addon will NOT send any messages. Useful for testing or when you want to stay HIDDEN.")
+table.insert(allFontStrings, hiddenModeSubtext)
+
+hiddenModeCheckbox = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
+hiddenModeCheckbox:SetPoint("TOPLEFT", 20, -260)
+hiddenModeCheckbox:SetSize(24, 24)
+hiddenModeCheckbox:SetChecked(GuildInviteRequestDB.hiddenMode)
+hiddenModeCheckbox:SetScript("OnClick", function(self)
+    GuildInviteRequestDB.hiddenMode = self:GetChecked()
+    if GuildInviteRequestDB.hiddenMode then
+        print("|cff00ff00[" .. addonName .. "]|r Hidden mode ENABLED - addon will NOT send messages")
+    else
+        print("|cff00ff00[" .. addonName .. "]|r Hidden mode DISABLED - addon will send messages normally")
+    end
+end)
+
+local hiddenModeCheckboxLabel = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hiddenModeCheckboxLabel:SetPoint("LEFT", hiddenModeCheckbox, "RIGHT", 5, 0)
+hiddenModeCheckboxLabel:SetText("Enable Hidden Mode")
+table.insert(allFontStrings, hiddenModeCheckboxLabel)
 
 -- Function to show config
 local function ShowConfig()
