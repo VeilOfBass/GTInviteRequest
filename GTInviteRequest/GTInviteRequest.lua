@@ -1,4 +1,9 @@
 local addonName = "GTInviteRequest"
+local addonVersion = "dev"
+
+if C_AddOns and C_AddOns.GetAddOnMetadata then
+    addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or addonVersion
+end
 local hasChecked = false
 local checkDelay = 5 -- seconds to wait after login before checking
 local waitingForWhoResults = false -- Flag to track if we're expecting /who results
@@ -454,7 +459,7 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
     elseif msg == "config" or msg == "settings" then
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
-        print("|cff00ff00[" .. addonName .. "]|r Version 1.0")
+        print("|cff00ff00[" .. addonName .. "]|r Version " .. addonVersion)
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
@@ -464,3 +469,4 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
         print("  /gir ver - Show addon version")
     end
 end
+
