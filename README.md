@@ -15,7 +15,7 @@
 
 * /gir config - Open settings GUI
 * /gir check - Manually trigger guild invite check
-* /gir reset - Reset request status (allows requesting again)
+* /gir reset - Reset config to default values
 * /gir list - List all Battle.net friends with online status
 * /gir ver - Show addon version
 
