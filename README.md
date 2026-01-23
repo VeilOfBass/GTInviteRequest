@@ -10,6 +10,7 @@
 * Configurable fallback guild name
 * Persistent settings saved between sessions
 * Won't spam - only requests once per logout
+* Hidden Mode prevents messages from being sent
 
 ### Commands
 
