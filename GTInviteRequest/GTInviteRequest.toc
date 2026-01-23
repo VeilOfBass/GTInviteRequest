@@ -2,8 +2,9 @@
 ## Title: Glamour Toad Invite Request
 ## Notes: Automatically requests guild invite from specific players if not in a guild
 ## Author: VeilOfBass
-## Version: 0.9
+## Version: 1.0
 ## SavedVariables: GuildInviteRequestDB
 
 GTInviteRequest.lua
+
 
