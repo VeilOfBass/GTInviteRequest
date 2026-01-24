@@ -177,6 +177,9 @@ local allButtons = {}
 -- Forward declare UI elements that need to be referenced in functions
 local hiddenModeCheckbox
 
+-- Forward declare RefreshFriendList for use in context menu
+local RefreshFriendList
+
 -- Create tab buttons
 local tabButtons = {}
 local currentTab = 1
@@ -262,7 +265,7 @@ scrollChild:SetWidth(scrollFrame:GetWidth())
 scrollChild:SetHeight(1)
 
 -- Function to refresh the friend list display
-local function RefreshFriendList()
+RefreshFriendList = function()
     -- Clear existing elements
     for _, child in ipairs({scrollChild:GetChildren()}) do
         child:Hide()
@@ -567,6 +570,57 @@ local function ShowConfig()
     ShowTab(1) -- Always start on Friends tab
     configFrame:Show()
 end
+
+-- Hook into the BNet friend right-click menu
+hooksecurefunc("FriendsFrame_ShowBNDropdown", function(name, connected, lineID, chatType, chatFrame, friendsList, bnetIDAccount)
+    if not bnetIDAccount then return end
+    
+    local accountInfo = C_BattleNet.GetFriendAccountInfo(bnetIDAccount)
+    if not accountInfo then return end
+    
+    local battleTag = accountInfo.battleTag or accountInfo.accountName
+    if not battleTag then return end
+    
+    -- Check if friend is already in the list
+    local alreadyAdded = false
+    for _, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
+        if friend == battleTag then
+            alreadyAdded = true
+            break
+        end
+    end
+    
+    -- Add our custom menu option
+    local info = UIDropDownMenu_CreateInfo()
+    if alreadyAdded then
+        info.text = "Remove from Guild Invite List"
+        info.func = function()
+            for i, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
+                if friend == battleTag then
+                    table.remove(GuildInviteRequestDB.preferredFriends, i)
+                    print("|cff00ff00[" .. addonName .. "]|r Removed " .. battleTag .. " from guild invite preference list")
+                    if configFrame:IsShown() then
+                        RefreshFriendList()
+                    end
+                    break
+                end
+            end
+        end
+        info.notCheckable = true
+    else
+        info.text = "Add to Guild Invite List"
+        info.func = function()
+            table.insert(GuildInviteRequestDB.preferredFriends, battleTag)
+            print("|cff00ff00[" .. addonName .. "]|r Added " .. battleTag .. " to guild invite preference list")
+            if configFrame:IsShown() then
+                RefreshFriendList()
+            end
+        end
+        info.notCheckable = true
+    end
+    
+    UIDropDownMenu_AddButton(info, UIDROPDOWNMENU_MENU_LEVEL)
+end)
 
 -- Slash command to manually trigger, reset, or list BNet friends
 SLASH_GUILDINVITEREQUEST1 = "/gir"
