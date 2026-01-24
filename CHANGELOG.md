@@ -1,4 +1,4 @@
-# Version 1.4 [ January 23 2026]
+# Version 1.4 [ January 24 2026]
 * Fixed Hidden Mode description text overflowing outside the settings frame
 * Added right-click context menu option in friends list to add/remove friends from preference list
 
