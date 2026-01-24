@@ -254,9 +254,16 @@ friendsInstructions:SetPoint("TOPLEFT", 5, -5)
 friendsInstructions:SetText("Add Battle.net friends (in order of preference):")
 table.insert(allFontStrings, friendsInstructions)
 
+local friendsHint = friendsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+friendsHint:SetPoint("TOPLEFT", 5, -20)
+friendsHint:SetWidth(400)
+friendsHint:SetJustifyH("LEFT")
+friendsHint:SetText("Tip: Right-click a Battle.net friend in your friends list and select 'Add to Guild Invite List'")
+table.insert(allFontStrings, friendsHint)
+
 -- Scroll frame for friend list
 local scrollFrame = CreateFrame("ScrollFrame", nil, friendsFrame, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", 5, -30)
+scrollFrame:SetPoint("TOPLEFT", 5, -45)
 scrollFrame:SetPoint("BOTTOMRIGHT", -25, 55)
 
 local scrollChild = CreateFrame("Frame")
@@ -571,56 +578,51 @@ local function ShowConfig()
     configFrame:Show()
 end
 
--- Hook into the BNet friend right-click menu
-hooksecurefunc("FriendsFrame_ShowBNDropdown", function(name, connected, lineID, chatType, chatFrame, friendsList, bnetIDAccount)
-    if not bnetIDAccount then return end
-    
-    local accountInfo = C_BattleNet.GetFriendAccountInfo(bnetIDAccount)
-    if not accountInfo then return end
-    
-    local battleTag = accountInfo.battleTag or accountInfo.accountName
-    if not battleTag then return end
-    
-    -- Check if friend is already in the list
-    local alreadyAdded = false
-    for _, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
-        if friend == battleTag then
-            alreadyAdded = true
-            break
-        end
-    end
-    
-    -- Add our custom menu option
-    local info = UIDropDownMenu_CreateInfo()
-    if alreadyAdded then
-        info.text = "Remove from Guild Invite List"
-        info.func = function()
-            for i, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
-                if friend == battleTag then
-                    table.remove(GuildInviteRequestDB.preferredFriends, i)
-                    print("|cff00ff00[" .. addonName .. "]|r Removed " .. battleTag .. " from guild invite preference list")
-                    if configFrame:IsShown() then
-                        RefreshFriendList()
+-- Hook into the new menu system (TWW 11.0+)
+if Menu and Menu.ModifyMenu then
+    Menu.ModifyMenu("MENU_UNIT_BN_FRIEND", function(owner, rootDescription, contextData)
+        if contextData then
+            -- Use battleTag directly from contextData instead of looking it up by ID
+            local battleTag = contextData.battleTag
+            
+            if battleTag then
+                -- Check if friend is already in the list
+                local alreadyAdded = false
+                for _, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
+                    if friend == battleTag then
+                        alreadyAdded = true
+                        break
                     end
-                    break
+                end
+                
+                rootDescription:CreateDivider()
+                
+                if alreadyAdded then
+                    rootDescription:CreateButton("Remove from Guild Invite List", function()
+                        for i, friend in ipairs(GuildInviteRequestDB.preferredFriends) do
+                            if friend == battleTag then
+                                table.remove(GuildInviteRequestDB.preferredFriends, i)
+                                print("|cff00ff00[" .. addonName .. "]|r Removed " .. battleTag .. " from guild invite list")
+                                if configFrame:IsShown() then
+                                    RefreshFriendList()
+                                end
+                                break
+                            end
+                        end
+                    end)
+                else
+                    rootDescription:CreateButton("Add to Guild Invite List", function()
+                        table.insert(GuildInviteRequestDB.preferredFriends, battleTag)
+                        print("|cff00ff00[" .. addonName .. "]|r Added " .. battleTag .. " to guild invite list")
+                        if configFrame:IsShown() then
+                            RefreshFriendList()
+                        end
+                    end)
                 end
             end
         end
-        info.notCheckable = true
-    else
-        info.text = "Add to Guild Invite List"
-        info.func = function()
-            table.insert(GuildInviteRequestDB.preferredFriends, battleTag)
-            print("|cff00ff00[" .. addonName .. "]|r Added " .. battleTag .. " to guild invite preference list")
-            if configFrame:IsShown() then
-                RefreshFriendList()
-            end
-        end
-        info.notCheckable = true
-    end
-    
-    UIDropDownMenu_AddButton(info, UIDROPDOWNMENU_MENU_LEVEL)
-end)
+    end)
+end
 
 -- Slash command to manually trigger, reset, or list BNet friends
 SLASH_GUILDINVITEREQUEST1 = "/gir"
@@ -678,6 +680,33 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
         ShowConfig()
     elseif msg == "ver" or msg == "version" then
         print("|cff00ff00[" .. addonName .. "]|r Version " .. addonVersion)
+    elseif msg == "menu" or msg == "menutag" then
+        -- Debug command to help find the correct menu tag and context data
+        print("|cff00ff00[" .. addonName .. "]|r Enabling context data debug mode.")
+        print("|cff00ff00[" .. addonName .. "]|r Right-click a friend now and check your chat.")
+        
+        -- Temporarily override the menu hook to print debug info
+        if Menu and Menu.ModifyMenu then
+            Menu.ModifyMenu("MENU_UNIT_BN_FRIEND", function(owner, rootDescription, contextData)
+                print("|cff00ff00[" .. addonName .. "]|r === Context Data Debug ===")
+                if contextData then
+                    for k, v in pairs(contextData) do
+                        print("  " .. tostring(k) .. " = " .. tostring(v))
+                    end
+                    
+                    -- Try to get the friend info using different methods
+                    if contextData.bnetIDAccount then
+                        local info = C_BattleNet.GetFriendAccountInfo(contextData.bnetIDAccount)
+                        if info then
+                            print("  Battle.net Friend: " .. (info.battleTag or info.accountName or "Unknown"))
+                        end
+                    end
+                else
+                    print("  contextData is nil!")
+                end
+                print("|cff00ff00[" .. addonName .. "]|r === End Debug ===")
+            end)
+        end
     else
         print("|cff00ff00[" .. addonName .. "]|r Commands:")
         print("  /gir config - Open settings GUI")
@@ -686,5 +715,6 @@ SlashCmdList["GUILDINVITEREQUEST"] = function(msg)
         print("  /gir reset - Reset all settings to defaults")
         print("  /gir list - List all Battle.net friends")
         print("  /gir ver - Show addon version")
+        print("  /gir menu - Help debug right-click menu integration")
     end
 end
